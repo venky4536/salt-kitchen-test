@@ -1,0 +1,68 @@
+---
+driver:
+  name: <%= ENV['KITCHEN_DRIVER'] || 'vagrant' %>
+  require_chef_omnibus: false
+  <% if ENV['KITCHEN_DRIVER'] && ENV['KITCHEN_DRIVER'].casecmp('openstack') %>
+  <% if ENV['KITCHEN_USE_FLOATING_IP'] && ENV['KITCHEN_USE_FLOATING_IP'].casecmp('true') %>
+  floating_ip_pool: provider
+  allocate_floating_ip: true
+  <% end %>
+  openstack_username: <%= ENV['KITCHEN_OS_USER']%>
+  openstack_project_name: <%= ENV['KITCHEN_OS_PROJECT'] %>
+  openstack_domain_name: <%= ENV['KITCHEN_OS_DOMAIN_NAME'] %>
+  openstack_api_key: <%= ENV['KITCHEN_OS_API_KEY'] %>
+  openstack_auth_url: <%= ENV['KITCHEN_OS_AUTH_URL'] %>
+  image_ref: <%= ENV['KITCHEN_OS_DEFAULT_IMAGE_REF'] %>
+  flavor_ref: <%= ENV['KITCHEN_OS_FLAVOR_REF'] %>
+  key_name: <%= ENV['KITCHEN_OS_KEYNAME'] %>
+  network_ref: <%= ENV['KITCHEN_OS_NETWORK_REF'] %>
+  server_name_prefix: <%= ENV['KITCHEN_OS_SERVER_PREFIX'] %>
+  private_key_path: <%= ENV['KITCHEN_OS_KEY_PATH'] %>
+
+transport:
+  ssh_key: <%= ENV['KITCHEN_OS_KEY_PATH'] %>
+  connection_timeout: 10
+  connection_retries: 5
+  username: <%= ENV['KITCHEN_SSH_USERNAME'] %>
+  <% end %>
+
+provisioner:
+  name: salt_solo
+  require_chef: false
+  is_file_root: true
+  pillars:
+  state_top:
+    base:
+      '*':
+        - rsyslog
+
+platforms:
+  - name: ubuntu/trusty64
+    <% if ENV['KITCHEN_DRIVER'] && ENV['KITCHEN_DRIVER'].casecmp('openstack') %>
+    driver:
+      <% if ENV['KITCHEN_OS_TRUSTY_IMAGE_REF'] %>
+        image_ref: <%= ENV['KITCHEN_OS_TRUSTY_IMAGE_REF'] %>
+      <% end %>
+    <% end %>
+  - name: ubuntu/xenial64
+    <% if ENV['KITCHEN_DRIVER'] && ENV['KITCHEN_DRIVER'].casecmp('openstack') %>
+    driver:
+      <% if ENV['KITCHEN_OS_XENIAL_IMAGE_REF'] %>
+        image_ref: <%= ENV['KITCHEN_OS_XENIAL_IMAGE_REF'] %>
+      <% end %>
+    <% end %>
+
+suites:
+  - name: default
+    verifier:
+      name: shell
+      remote_exec: true
+      command: |        
+        sudo -s << SERVERSPEC
+        gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3
+        \curl -sSL https://get.rvm.io | bash -s stable
+        source /etc/profile.d/rvm.sh
+        rvm install 2.4
+        gem install serverspec
+        rspec -c -f d -I serverspec /tmp/kitchen/srv/salt/test/integration/default/serverspec/rsyslog_spec.rb
+        SERVERSPEC
